@@ -4,9 +4,10 @@
 """Jisui page processing (SKILL.md of the jisui skill): deskew, crop to one frame per book, B&W with pictures kept grayscale.
 
 usage: uv run jisui.py SRC_DIR OUT_DIR [--threshold N | --gray | --color] [--no-deskew 1,12,...] [--picture 3,24,...] [--dpi N]
-                       [--cover first|FILE] [--jacket last|FILE] [--jacket-rotate 0|90|180|270]
+                       [--cover first|FILE|jacket:X0-X1] [--jacket last|FILE] [--jacket-rotate 0|90|180|270]
 The scan resolution comes from the images' DPI tag (--dpi overrides; 300 if neither); no page size is assumed.
 --cover: the first scan (first) or FILE is copied unchanged to OUT_DIR/0000.<ext>; without it every scan is a body page.
+         jacket:X0-X1 crops columns X0-X1 (full height) of the upright jacket as OUT_DIR/0000.png (needs --jacket).
 --jacket: the last scan (last) or FILE is only rotated upright (clockwise degrees), colour and size kept, as the last page.
 Writes OUT_DIR/NNNN.png (1-bit, or grayscale when the page has a picture) and OUT_DIR/../<name>-report.json.
 """
@@ -232,7 +233,10 @@ def main():
     cover, jacket = arg("--cover"), arg("--jacket")
     out.mkdir(parents=True, exist_ok=True)
     files = sorted(p for p in src.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".tif", ".tiff"))
-    if cover:  # inserted as-is
+    from_jacket = cover and cover.startswith("jacket:")
+    if from_jacket and not jacket:
+        sys.exit("--cover jacket:X0-X1 needs --jacket")
+    if cover and not from_jacket:  # inserted as-is
         cover, files = (files[0], files[1:]) if cover == "first" else (Path(cover), files)
         shutil.copy(cover, out / f"0000{cover.suffix.lower()}")
     if jacket:
@@ -240,7 +244,11 @@ def main():
         cw = int(arg("--jacket-rotate") or 0) % 360
         with Image.open(jacket) as im:
             dpi_tag = im.info.get("dpi", (DEFAULT_DPI, DEFAULT_DPI))
-            (im.rotate(-cw, expand=True) if cw else im).save(out / f"{len(files) + 1:04d}.png", dpi=dpi_tag)
+            upright = im.rotate(-cw, expand=True) if cw else im.copy()  # multiples of 90: PIL transposes, lossless
+        upright.save(out / f"{len(files) + 1:04d}.png", dpi=dpi_tag)
+        if from_jacket:  # the front panel, still colour, cropped only
+            x0, x1 = map(int, cover[len("jacket:"):].split("-"))
+            upright.crop((x0, 0, x1, upright.height)).save(out / "0000.png", dpi=dpi_tag)
     heights = [cv2.imread(str(p), cv2.IMREAD_GRAYSCALE).shape[0] for p in files]
     body_h = int(np.median(heights))
     if "--dpi" in sys.argv:

@@ -5,7 +5,7 @@ A Claude Code skill for processing scanned page images (ScanSnap or any scanner)
 - deskew (rotation and sheet-feed shear, ±3° in 0.1° steps)
 - minimal 2 mm margins, one uniform page size per book
 - optional B&W binarization with pictures kept grayscale
-- cover / jacket handling: include, leave out, or save separately; from a given file, the scans, or the web
+- cover / jacket handling: include, leave out, or save separately; from a given file, the scans, the front of the jacket, or the web
 - optional OCR text layer (ocrmypdf + Apple OCR)
 - optional PDF bookmarks from the table of contents
 - Title / Author metadata editing without recompression
