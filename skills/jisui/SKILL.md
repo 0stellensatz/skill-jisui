@@ -1,59 +1,59 @@
 ---
 name: jisui
-description: Jisui (自炊) processing of scanned page images into a clean ZIP or PDF — deskew (rotation + sheet-feed shear), minimal margins with one uniform page size, B&W binarization with pictures kept grayscale, cover/jacket handling, OCR text layer (ocrmypdf + Apple OCR), PDF bookmarks from the table of contents, and Title/Author metadata editing without recompression. Use this whenever the user has a folder of scanned images (from a ScanSnap or other scanner) of a book, magazine, manual, notes, or any document and wants them turned into a ZIP/PDF, cleaned up, deskewed, cropped, binarized, OCR'd or bookmarked — even if they don't say "jisui", e.g. "turn these scans into a PDF", "スキャンした画像を PDF にして", "OCR this scanned PDF", "add a TOC to this scan".
+description: Jisui (自炊) processing of scanned page images into a clean ZIP or PDF — deskew (rotation + sheet-feed shear), minimal margins with one uniform page size, B&W binarization with pictures kept grayscale, cover/jacket handling, OCR text layer (ocrmypdf + Apple OCR), PDF bookmarks from the table of contents, and Title/Author metadata editing without recompression. Use this whenever the user has a folder of scanned images (from a ScanSnap or other scanner) of a book, magazine, manual, notes, or any document and wants them turned into a ZIP/PDF, cleaned up, deskewed, cropped, binarized, OCR'd or bookmarked — even if they don't say "jisui", e.g. "turn these scans into a PDF", "make a PDF from my scanned images", "OCR this scanned PDF", "add a TOC to this scan".
 ---
 
-# Jisui（自炊）処理
+# Jisui (自炊) processing
 
-スキャン画像 → ZIP / PDF のルール。対象は本に限らず、スキャンしたもの全般（雑誌、資料、ノートなど）。
-出力ファイルの名前や置き場所はこのスキルでは決めません。呼び出し側（プロジェクトの CLAUDE.md やユーザーの指示）に従い、なければユーザーに聞きます。
+Rules for scanned images → ZIP / PDF. Applies not only to books but to anything scanned (magazines, documents, notes, etc.).
+This skill does not decide the output file's name or location. Follow the caller (the project's CLAUDE.md or the user's instructions); if neither says, ask the user.
 
-## ページ処理
+## Page processing
 
-0. 表紙：ネットからダウンロードした画像を使うので、加工せず（カラーのまま、寸法も変えずに）そのまま先頭に入れます。以下の処理は本文ページだけに行います。表紙画像がないもの（資料など）は、先頭の画像をそのまま表紙として扱うかユーザーに確かめます。
-   - カバー（ジャケット）のスキャンがあれば、向きを正しく回転するだけで（カラーのまま、寸法も変えずに）最後のページに入れます。回転はピクセル単位で正確に行い、JPEG が無劣化で回せない寸法なら PNG にします。PDF ではそのページだけ実寸（スキャンの DPI どおり）にします。
-1. skew 補正：ページごとに傾きを ±3° の範囲、0.1° 刻みで検出して補正します。
-   - 回転（行が傾いている）と、シアー（行は水平なのに左右の版面の端だけが斜め。シートフィードで紙が横にずれると起きる）を別々に検出して補正します。
-   - 文字の少ないページ（扉、題字、短いページ）は傾きを確かめられないので補正しません。
-2. 余白の最小化：本文の端から上下左右に 2mm（300dpi で 24px）だけ余白を残して切り詰めます。
-   - スキャナーの影やページ端の細い線、小さなゴミは本文の範囲に含めません。ページ端の影や線は白く消します。
-3. 寸法の統一：1冊の本文ページはすべて同じ寸法にします。
-   - 切り抜く枠の寸法は1冊ごとに1つ決め、位置はページごとにそのページの版面に合わせます（スキャンごとに版面の位置が数 mm ずれるため）。文字の少ないページ（扉、章の始まり、短いページ）は、同じ側（奇数／偶数）の近くのページの位置を使うので、元の配置のまま残ります。
-   - 枠からはみ出すページは、少し縮小して枠に収めます。
-   - 指示があったときだけ：全面の図版や扉などの画像ページを本文の枠から外し、本文と同じ高さで幅だけ広い、画像ページ共通の枠にします（`--picture`）。本文ページの余白を小さくできます。
-4. 白紙ページ：飛ばさずに、白紙のまま残します。
-5. 全ページ保持：広告を含め、ページは削除しません。
-6. B&W：指示があったときだけ白黒2値化します（不可逆なので既定ではしない）。
-   - 文字は2値化しますが、写真や図版などの画像部分は2値化せず Grayscale にします。
-   - Threshold は 200（0–255、これより暗い画素を黒にする）を基準にします。自動判定（Otsu、160 前後）では文字が薄すぎました。
-   - 作業後は、使った Threshold を伝え、その値で適当かどうかをユーザーに確認します。
-7. OCR：指示があったときだけ、PDF に OCR のテキスト層を付けます（`ocrmypdf -j 2 -l jpn+eng --output-type pdf`、画像は変えない。`-l` は内容の言語に合わせる：韓国語なら `kor+eng`）。Apple OCR はページ数が多いとタイムアウトしやすいので、`qpdf` で 50 ページずつに分けて OCR し、失敗した分だけやり直してから結合します。
-   - Apple OCR（LiveText）は、連続して使うと途中から、エラーを出さずに空のテキスト層を返すことがあります。結合の前に、ページごとに `pdftotext` で文字が取れているか確かめ、本文ページで空のものがある分は、少し待ってからやり直します。直らないときは Mac を再起動します。
-8. しおり（indexing）：指示があったときだけ、PDF に目次のしおり（outline）を付けます。
-   - 目次ページを読み、章・節・項を目次どおりの階層で、見出しは印刷どおりに入れます（まえがき・あとがき・解説・注・索引なども目次にあれば入れる）。先頭に、目次ページを指す「目次」を置きます。目次にページ番号のない部・章は、その扉ページか見出しのあるページを指します。
-   - 印刷されたページ番号（ノンブル）と PDF のページの対応は、あちこちでノンブルを読んで決めます。口絵などでずれることがあるので、第1階層はすべて、下の階層もいくつか、実際にそのページに見出しがあるか確かめます。
-   - メタデータ編集と同じ手順で `pikepdf` で書き込み（画像は再圧縮しない）、`/PageMode /UseOutlines` にします。書いた後に読み戻して確かめます。目次のないものは付けずにユーザーに伝えます。
+0. Cover: the cover is an image downloaded from the web, so put it first as-is, unprocessed (still in color, dimensions unchanged). All the steps below apply to body pages only. For items with no cover image (documents, etc.), ask the user whether to treat the first image as the cover as-is.
+   - If there is a scan of the cover (jacket), only rotate it to the correct orientation (still in color, dimensions unchanged) and put it as the last page. Rotate pixel-exactly; if the JPEG's dimensions don't allow lossless rotation, use PNG. In the PDF, make only that page actual size (per the scan's DPI).
+1. Skew correction: for each page, detect the skew within ±3° in 0.1° steps and correct it.
+   - Detect and correct rotation (the lines are tilted) and shear (the lines are level but only the left/right edges of the text block are slanted — this happens when the paper slides sideways in a sheet feeder) separately.
+   - Pages with little text (title pages, half-titles, short pages) can't be checked reliably for skew, so don't correct them.
+2. Margin minimization: trim to leave only 2mm (24px at 300dpi) of margin on every side of the text block.
+   - Don't include scanner shadows, thin lines at the page edges, or small specks in the text block. Whiten shadows and lines at the page edges.
+3. Uniform dimensions: all body pages of one volume get the same dimensions.
+   - Decide one crop-box size per volume, and position it per page to fit that page's text block (the text block position shifts a few mm from scan to scan). Pages with little text (title pages, chapter openings, short pages) use the position of a nearby page on the same side (odd/even), so they keep their original layout.
+   - Pages that overflow the box are scaled down slightly to fit.
+   - Only when instructed: take image pages such as full-page illustrations and title pages out of the body box and give them a shared image-page box with the same height as the body but wider (`--picture`). This allows smaller margins on the body pages.
+4. Blank pages: don't skip them; keep them as blank pages.
+5. Keep every page: don't delete any pages, including advertisements.
+6. B&W: binarize to black and white only when instructed (it is lossy, so not by default).
+   - Binarize text, but don't binarize image areas such as photos and illustrations; make them grayscale.
+   - Use a threshold of 200 (0–255; pixels darker than this become black) as the baseline. Automatic selection (Otsu, around 160) made the text too faint.
+   - After the work, report the threshold used and ask the user whether that value looks right.
+7. OCR: only when instructed, add an OCR text layer to the PDF (`ocrmypdf -j 2 -l jpn+eng --output-type pdf`, images unchanged; match `-l` to the content's language, e.g. `kor+eng` for Korean). Apple OCR tends to time out on large page counts, so split with `qpdf` into 50-page chunks, OCR each, redo only the failed ones, then merge.
+   - When used repeatedly, Apple OCR (LiveText) can start silently returning empty text layers partway through, without any error. Before merging, check each page with `pdftotext` to confirm text was extracted; for chunks with empty body pages, wait a bit and redo them. If that doesn't fix it, restart the Mac.
+8. Bookmarks (indexing): only when instructed, add table-of-contents bookmarks (outline) to the PDF.
+   - Read the table-of-contents pages and add parts/chapters/sections in the same hierarchy as the TOC, with headings exactly as printed (include the preface, afterword, commentary, notes, index, etc. if they are in the TOC). Put an entry for the table of contents itself first, pointing to the TOC page. Parts/chapters with no page number in the TOC point to their title page or the page with their heading.
+   - Determine the mapping between printed page numbers and PDF pages by reading page numbers in several places. It can shift (e.g. because of frontispieces), so check that the heading actually appears on the target page for every top-level entry and some lower-level ones.
+   - Write it with `pikepdf` using the same procedure as metadata editing (no image recompression), and set `/PageMode /UseOutlines`. Read it back after writing to verify. If there is no table of contents, don't add bookmarks; tell the user.
 
-## 実行
+## Running
 
-`uv run <このスキルのフォルダ>/scripts/jisui.py <画像フォルダ> <出力フォルダ> [--threshold N | --gray | --color] [--no-deskew 0,12,...] [--picture 3,24,...] [--dpi N] [--jacket 0|90|180|270]` が 0（表紙は先頭の画像を `0000.<拡張子>` としてそのままコピー。`--jacket` なら最後の画像をカバーとして、時計回りにその角度だけ回して最後のページ `NNNN.png` に）、1〜3 と 6（B&W）を行い（`--gray` なら B&W なしで Grayscale のまま、`--color` ならカラーのまま）、ページ画像（PNG）とレポート（`<出力フォルダ>-report.json`：Threshold、枠の寸法、白紙・縮小・Grayscale 部分のページ）を書き出します。`--no-deskew` には補正しないページ番号（表紙が 0）を、`--picture` には画像ページの番号を渡します（レポートに画像ページの枠の寸法も出る。高さは本文と同じなので `--imgsize` は1つでよい）。作業用の出力はスクラッチ領域に置き、元のスキャン画像やユーザーのフォルダには書きません。
+`uv run <this skill's folder>/scripts/jisui.py <image folder> <output folder> [--threshold N | --gray | --color] [--no-deskew 0,12,...] [--picture 3,24,...] [--dpi N] [--jacket 0|90|180|270]` performs step 0 (copies the first image as-is as the cover, `0000.<ext>`; with `--jacket`, takes the last image as the cover jacket, rotates it clockwise by that angle, and makes it the last page `NNNN.png`), steps 1–3, and step 6 (B&W) (with `--gray`, no B&W and pages stay grayscale; with `--color`, pages stay in color), and writes the page images (PNG) and a report (`<output folder>-report.json`: threshold, box dimensions, blank/scaled-down pages and pages with grayscale areas). Pass page numbers not to deskew to `--no-deskew` (the cover is 0), and image-page numbers to `--picture` (the report then also gives the image-page box dimensions; the height is the same as the body, so one `--imgsize` is enough). Put working output in the scratch area; never write to the original scans or the user's folders.
 
-- 判型は仮定しません。既定で「余白を最小にし、本文ページの寸法を揃える」処理をします。mm と px の換算に使う解像度は画像の DPI タグから取り、タグがない・150 未満（72 などの仮の値）のときは 300dpi とみなします（違うときは `--dpi N`）。
-- PDF にするときは `img2pdf --imgsize x<枠の高さ mm>` で寸法を指定します（出力の PNG に DPI 情報がないため）。カバーのページは `--imgsize` なしで別に作り（DPI タグどおりの実寸）、`pikepdf` で末尾に結合します。
-- 処理後は、何ページかを画像で見て（傾き、切り詰め、2値化の具合）、レポートの白紙・縮小ページが妥当か確かめてから出力します。
+- Don't assume a trim size. By default it minimizes margins and makes the body pages uniform in size. The resolution for mm↔px conversion comes from the image's DPI tag; if there is no tag or it is below 150 (a placeholder like 72), assume 300dpi (otherwise pass `--dpi N`).
+- When making a PDF, set the size with `img2pdf --imgsize x<box height in mm>` (the output PNGs carry no DPI info). Build the cover-jacket page separately without `--imgsize` (actual size per its DPI tag) and append it with `pikepdf`.
+- After processing, look at a few pages as images (skew, trimming, binarization) and check that the blank/scaled-down pages in the report make sense before producing output.
 
-## 出力
+## Output
 
-- ZIP：処理後のページ画像を、アーカイブの最上位にページ順のファイル名で入れます。画像は再圧縮しません（`zip -0`）。`.DS_Store` などは入れません。
-- PDF：ZIP と同じ画像を再圧縮せずに並べます（`img2pdf`）。OCR は 7、しおりは 8 に従います。
-- モードの呼び方：本文ページで決めて `color` / `grayscale` / `bw`（カラーの表紙だけでは `color` にしない）。OCR 層があれば `+ocr`、しおりがあれば `+toc`（ZIP には付かない）。ファイル名に入れるかどうかは呼び出し側が決めます。
+- ZIP: put the processed page images at the top level of the archive, with filenames in page order. Don't recompress the images (`zip -0`). Don't include `.DS_Store` and the like.
+- PDF: lay out the same images as the ZIP without recompression (`img2pdf`). OCR follows step 7, bookmarks step 8.
+- Mode names: decided by the body pages — `color` / `grayscale` / `bw` (a color cover alone doesn't make it `color`). Add `+ocr` if there is an OCR layer and `+toc` if there are bookmarks (never on a ZIP). Whether to put it in the filename is up to the caller.
 
-## メタデータ編集（Title / Author）
+## Metadata editing (Title / Author)
 
-値は呼び出し側（カタログ、ユーザー）から受け取ります。こちらで推測して埋めません。
+Take the values from the caller (catalog, user). Never guess and fill them in.
 
-- 項目は Title と Author だけ。Author に訳者は入れません。
-- PDF：Info 辞書と XMP の両方に Title と Author を、ページを再圧縮せずに書きます（`pikepdf`）。
-- EPUB：OPF の主 `dc:title` と各 `dc:creator`（とそれを `refines` する `dcterms:*` / `file-as` の meta）だけを変え、他には触れません。ZIP はエントリの順序と圧縮方式を保ったまま書き直し、`mimetype` を先頭・無圧縮にします。Standard Ebooks の subtitle / long-title のエントリはそのままで構いません。
-- ZIP（スキャン画像）：メタデータはないので飛ばします。
-- スクラッチ領域のコピーで作業し、確かめて（ページ数／エントリが変わっていない、読み戻したメタデータが渡された値と一致）から元のファイルと置き換えます。置き換えはユーザーのファイルの上書きなので、呼び出し側が認めていなければ先に確認します。
+- Only the Title and Author fields. Don't put translators in Author.
+- PDF: write Title and Author to both the Info dictionary and XMP, without recompressing pages (`pikepdf`).
+- EPUB: change only the OPF's main `dc:title` and each `dc:creator` (and the `dcterms:*` / `file-as` meta that `refines` them); touch nothing else. Rewrite the ZIP keeping the entry order and compression methods, with `mimetype` first and uncompressed. Standard Ebooks' subtitle / long-title entries can be left as they are.
+- ZIP (scanned images): has no metadata, so skip it.
+- Work on a copy in the scratch area, verify it (page count / entries unchanged, metadata read back matches the given values), then replace the original file. Replacing overwrites the user's file, so confirm first unless the caller has approved it.
