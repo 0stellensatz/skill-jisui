@@ -1,16 +1,16 @@
 # jisui (自炊)
 
-A Claude Code skill for processing scanned page images (ScanSnap or any scanner) into a clean ZIP or PDF:
+A Claude Code skill for processing scanned page images (ScanSnap or any scanner) into a clean ZIP, CBZ or PDF:
 
 - deskew (rotation and sheet-feed shear, ±3° in 0.1° steps)
 - minimal 2 mm margins, one uniform page size per book
 - optional B&W binarization with pictures kept grayscale
-- cover / jacket handling
+- cover / jacket handling: include, leave out, or save separately; from a given file, the scans, or the web
 - optional OCR text layer (ocrmypdf + Apple OCR)
 - optional PDF bookmarks from the table of contents
 - Title / Author metadata editing without recompression
 
-The skill instructions (`skills/jisui/SKILL.md`) are written in Japanese; Claude follows them regardless of the language you talk to it in.
+The skill instructions (`skills/jisui/SKILL.md`) are written in English; Claude follows them regardless of the language you talk to it in.
 
 ## Install
 

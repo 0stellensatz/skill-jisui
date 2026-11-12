@@ -3,9 +3,11 @@
 # ///
 """Jisui page processing (SKILL.md of the jisui skill): deskew, crop to one frame per book, B&W with pictures kept grayscale.
 
-usage: uv run jisui.py SRC_DIR OUT_DIR [--threshold N | --gray | --color] [--no-deskew 0,12,...] [--picture 3,24,...] [--dpi N] [--jacket 0|90|180|270]
+usage: uv run jisui.py SRC_DIR OUT_DIR [--threshold N | --gray | --color] [--no-deskew 1,12,...] [--picture 3,24,...] [--dpi N]
+                       [--cover first|FILE] [--jacket last|FILE] [--jacket-rotate 0|90|180|270]
 The scan resolution comes from the images' DPI tag (--dpi overrides; 300 if neither); no page size is assumed.
-The first image is the cover and is copied unchanged to OUT_DIR/0000.<ext>.
+--cover: the first scan (first) or FILE is copied unchanged to OUT_DIR/0000.<ext>; without it every scan is a body page.
+--jacket: the last scan (last) or FILE is only rotated upright (clockwise degrees), colour and size kept, as the last page.
 Writes OUT_DIR/NNNN.png (1-bit, or grayscale when the page has a picture) and OUT_DIR/../<name>-report.json.
 """
 import json
@@ -226,13 +228,16 @@ def main():
         threshold = None
     no_deskew = {int(k) for k in sys.argv[sys.argv.index("--no-deskew") + 1].split(",")} if "--no-deskew" in sys.argv else set()
     pictures = {int(k) for k in sys.argv[sys.argv.index("--picture") + 1].split(",")} if "--picture" in sys.argv else set()
+    arg = lambda f: sys.argv[sys.argv.index(f) + 1] if f in sys.argv else None
+    cover, jacket = arg("--cover"), arg("--jacket")
     out.mkdir(parents=True, exist_ok=True)
     files = sorted(p for p in src.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".tif", ".tiff"))
-    cover, files = files[0], files[1:]  # cover is a downloaded image: inserted as-is
-    shutil.copy(cover, out / f"0000{cover.suffix.lower()}")
-    if "--jacket" in sys.argv:  # last image is the jacket scan: only rotated upright (clockwise degrees), colour and size kept
-        jacket, files = files[-1], files[:-1]
-        cw = int(sys.argv[sys.argv.index("--jacket") + 1]) % 360
+    if cover:  # inserted as-is
+        cover, files = (files[0], files[1:]) if cover == "first" else (Path(cover), files)
+        shutil.copy(cover, out / f"0000{cover.suffix.lower()}")
+    if jacket:
+        jacket, files = (files[-1], files[:-1]) if jacket == "last" else (Path(jacket), files)
+        cw = int(arg("--jacket-rotate") or 0) % 360
         with Image.open(jacket) as im:
             dpi_tag = im.info.get("dpi", (DEFAULT_DPI, DEFAULT_DPI))
             (im.rotate(-cw, expand=True) if cw else im).save(out / f"{len(files) + 1:04d}.png", dpi=dpi_tag)
@@ -272,7 +277,7 @@ def main():
         "dpi": round(dpi, 1), "threshold": threshold, "frame_px": [fw, fh],
         "frame_mm": [round(fw / dpi * 25.4, 1), round(fh / dpi * 25.4, 1)],
         "pictures": sorted(pictures), "picture_frame_px": [pw, fh], "picture_frame_mm": [round(pw / dpi * 25.4, 1), round(fh / dpi * 25.4, 1)],
-        "pages": len(files) + 1, "blank": [k for k, i in enumerate(info, 1) if not i["box"]],
+        "pages": len(files) + bool(cover) + bool(jacket), "blank": [k for k, i in enumerate(info, 1) if not i["box"]],
         "deskewed": {k: i["angle"] for k, i in enumerate(info, 1) if any(i["angle"])},
         "shrunk": {k: round(r[0], 3) for k, r in enumerate(res, 1) if r[0] is not None},
         "grayscale_parts": [k for k, r in enumerate(res, 1) if r[1]],
