@@ -1,0 +1,10 @@
+{
+  "name": "jisui",
+  "displayName": "Jisui (自炊)",
+  "description": "Turn scanned page images into a clean ZIP or PDF: deskew, minimal uniform margins, B&W with pictures kept grayscale, cover/jacket handling, OCR text layer, TOC bookmarks, and Title/Author metadata.",
+  "author": { "name": "0stellensatz", "url": "https://github.com/0stellensatz" },
+  "homepage": "https://github.com/0stellensatz/skill-jisui",
+  "repository": "https://github.com/0stellensatz/skill-jisui",
+  "license": "MIT",
+  "keywords": ["scan", "pdf", "ocr", "deskew", "jisui", "scansnap"]
+}

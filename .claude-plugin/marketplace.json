@@ -1,0 +1,7 @@
+{
+  "name": "0stellensatz-plugins",
+  "owner": { "name": "0stellensatz", "url": "https://github.com/0stellensatz" },
+  "plugins": [
+    { "name": "jisui", "source": "./", "description": "Scanned page images → clean ZIP/PDF (deskew, crop, B&W, OCR, bookmarks)" }
+  ]
+}
