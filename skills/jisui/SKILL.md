@@ -1,12 +1,19 @@
 ---
 name: jisui
 description: Jisui (自炊) processing of scanned page images into a clean ZIP, CBZ or PDF — deskew (rotation + sheet-feed shear), minimal margins with one uniform page size, B&W binarization with pictures kept grayscale, cover/jacket handling (include, leave out, or save as separate files; from a given file, the scans, the front of the jacket, or the web), OCR text layer (ocrmypdf + Apple OCR), PDF bookmarks from the table of contents, and Title/Author metadata editing without recompression. Use this whenever the user has a folder of scanned images (from a ScanSnap or other scanner) of a book, magazine, manual, notes, or any document and wants them turned into a ZIP/CBZ/PDF, cleaned up, deskewed, cropped, binarized, OCR'd or bookmarked — even if they don't say "jisui", e.g. "turn these scans into a PDF", "make a PDF from my scanned images", "OCR this scanned PDF", "add a TOC to this scan".
+argument-hint: "[scan folder or file (default: .)] [more paths...]"
 ---
 
 # Jisui (自炊) processing
 
 Rules for scanned images → ZIP / CBZ / PDF. Applies not only to books but to anything scanned (magazines, documents, notes, etc.).
 This skill does not decide the output file's name or location. Follow the caller (the project's CLAUDE.md or the user's instructions); if neither says, ask the user.
+
+## Given paths
+
+Arguments: $ARGUMENTS
+
+Read the given paths (folders of scans, image files, or PDFs) first; if none were given, use the current directory (`.`) — unless the request itself names the scans. Then: list each one recursively (subfolders, file names, extensions, counts, image dimensions/DPI of a few files), and look at a few images (first, last, and a couple in between). From that, work out the structure — e.g. one volume per folder or several volumes in one folder, which files look like the cover / jacket / body pages, odd/even page splits, duplicates or stray files — and propose a concrete jisui plan (volumes, page order, cover/jacket sources, suggested options). Fold that plan into the questions below so the user confirms or corrects it in one step.
 
 ## Before starting
 

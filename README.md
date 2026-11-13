@@ -19,7 +19,7 @@ claude plugin marketplace add 0stellensatz/skill-jisui
 claude plugin install jisui@0stellensatz-plugins
 ```
 
-Then just ask, e.g. "turn the scans in ~/Scans/book into a PDF", or invoke `/jisui:jisui`.
+Then just ask, e.g. "turn the scans in ~/Scans/book into a PDF", or invoke `/jisui:jisui [~/Scans/book ...]` (no path = current directory) — it reads the folders, works out their structure, and proposes a plan.
 
 ## Requirements
 
