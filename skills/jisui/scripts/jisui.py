@@ -4,10 +4,13 @@
 """Jisui page processing (SKILL.md of the jisui skill): deskew, crop to one frame per book, B&W with pictures kept grayscale.
 
 usage: uv run jisui.py SRC_DIR OUT_DIR [--threshold N | --gray | --color] [--no-deskew 1,12,...] [--picture 3,24,...] [--dpi N]
-                       [--cover first|FILE|jacket:X0-X1] [--jacket last|FILE] [--jacket-rotate 0|90|180|270]
+                       [--cover first|FILE|jacket:X0-X1] [--back last|FILE|jacket:X0-X1]
+                       [--jacket last|FILE] [--jacket-rotate 0|90|180|270]
 The scan resolution comes from the images' DPI tag (--dpi overrides; 300 if neither); no page size is assumed.
 --cover: the first scan (first) or FILE is copied unchanged to OUT_DIR/0000.<ext>; without it every scan is a body page.
          jacket:X0-X1 crops columns X0-X1 (full height) of the upright jacket as OUT_DIR/0000.png (needs --jacket).
+--back: the same for the back cover, from the last scan (before the jacket when that is the last scan too),
+        written after the body pages as OUT_DIR/NNNN.<ext> (.png when cropped from the jacket).
 --jacket: the last scan (last) or FILE is only rotated upright (clockwise degrees), colour and size kept, as the last page.
 Writes OUT_DIR/NNNN.png (1-bit, or grayscale when the page has a picture) and OUT_DIR/../<name>-report.json.
 """
@@ -230,25 +233,30 @@ def main():
     no_deskew = {int(k) for k in sys.argv[sys.argv.index("--no-deskew") + 1].split(",")} if "--no-deskew" in sys.argv else set()
     pictures = {int(k) for k in sys.argv[sys.argv.index("--picture") + 1].split(",")} if "--picture" in sys.argv else set()
     arg = lambda f: sys.argv[sys.argv.index(f) + 1] if f in sys.argv else None
-    cover, jacket = arg("--cover"), arg("--jacket")
+    cover, back, jacket = arg("--cover"), arg("--back"), arg("--jacket")
     out.mkdir(parents=True, exist_ok=True)
     files = sorted(p for p in src.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".tif", ".tiff"))
-    from_jacket = cover and cover.startswith("jacket:")
-    if from_jacket and not jacket:
-        sys.exit("--cover jacket:X0-X1 needs --jacket")
-    if cover and not from_jacket:  # inserted as-is
+    crop = lambda spec: isinstance(spec, str) and spec.startswith("jacket:")  # a panel cropped from the jacket
+    if (crop(cover) or crop(back)) and not jacket:
+        sys.exit("--cover/--back jacket:X0-X1 needs --jacket")
+    if cover and not crop(cover):  # inserted as-is
         cover, files = (files[0], files[1:]) if cover == "first" else (Path(cover), files)
         shutil.copy(cover, out / f"0000{cover.suffix.lower()}")
-    if jacket:
+    if jacket:  # scan order: cover, body, back cover, jacket
         jacket, files = (files[-1], files[:-1]) if jacket == "last" else (Path(jacket), files)
+    if back and not crop(back):  # inserted as-is
+        back, files = (files[-1], files[:-1]) if back == "last" else (Path(back), files)
+        shutil.copy(back, out / f"{len(files) + 1:04d}{back.suffix.lower()}")
+    if jacket:
         cw = int(arg("--jacket-rotate") or 0) % 360
         with Image.open(jacket) as im:
             dpi_tag = im.info.get("dpi", (DEFAULT_DPI, DEFAULT_DPI))
             upright = im.rotate(-cw, expand=True) if cw else im.copy()  # multiples of 90: PIL transposes, lossless
-        upright.save(out / f"{len(files) + 1:04d}.png", dpi=dpi_tag)
-        if from_jacket:  # the front panel, still colour, cropped only
-            x0, x1 = map(int, cover[len("jacket:"):].split("-"))
-            upright.crop((x0, 0, x1, upright.height)).save(out / "0000.png", dpi=dpi_tag)
+        upright.save(out / f"{len(files) + 1 + bool(back):04d}.png", dpi=dpi_tag)
+        for spec, name in ((cover, "0000"), (back, f"{len(files) + 1:04d}")):
+            if crop(spec):  # the front/back panel, still colour, cropped only
+                x0, x1 = map(int, spec[len("jacket:"):].split("-"))
+                upright.crop((x0, 0, x1, upright.height)).save(out / f"{name}.png", dpi=dpi_tag)
     heights = [cv2.imread(str(p), cv2.IMREAD_GRAYSCALE).shape[0] for p in files]
     body_h = int(np.median(heights))
     if "--dpi" in sys.argv:
@@ -285,7 +293,7 @@ def main():
         "dpi": round(dpi, 1), "threshold": threshold, "frame_px": [fw, fh],
         "frame_mm": [round(fw / dpi * 25.4, 1), round(fh / dpi * 25.4, 1)],
         "pictures": sorted(pictures), "picture_frame_px": [pw, fh], "picture_frame_mm": [round(pw / dpi * 25.4, 1), round(fh / dpi * 25.4, 1)],
-        "pages": len(files) + bool(cover) + bool(jacket), "blank": [k for k, i in enumerate(info, 1) if not i["box"]],
+        "pages": len(files) + bool(cover) + bool(back) + bool(jacket), "blank": [k for k, i in enumerate(info, 1) if not i["box"]],
         "deskewed": {k: i["angle"] for k, i in enumerate(info, 1) if any(i["angle"])},
         "shrunk": {k: round(r[0], 3) for k, r in enumerate(res, 1) if r[0] is not None},
         "grayscale_parts": [k for k, r in enumerate(res, 1) if r[1]],

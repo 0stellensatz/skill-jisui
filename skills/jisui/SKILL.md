@@ -1,6 +1,6 @@
 ---
 name: jisui
-description: Jisui (自炊) processing of scanned page images into a clean ZIP, CBZ or PDF — deskew (rotation + sheet-feed shear), minimal margins with one uniform page size, B&W binarization with pictures kept grayscale, cover/jacket handling (include, leave out, or save as separate files; from a given file, the scans, the front of the jacket, or the web), OCR text layer (ocrmypdf + Apple OCR), PDF bookmarks from the table of contents, and Title/Author metadata editing without recompression. Use this whenever the user has a folder of scanned images (from a ScanSnap or other scanner) of a book, magazine, manual, notes, or any document and wants them turned into a ZIP/CBZ/PDF, cleaned up, deskewed, cropped, binarized, OCR'd or bookmarked — even if they don't say "jisui", e.g. "turn these scans into a PDF", "make a PDF from my scanned images", "OCR this scanned PDF", "add a TOC to this scan".
+description: Jisui (自炊) processing of scanned page images into a clean ZIP, CBZ or PDF — deskew (rotation + sheet-feed shear), minimal margins with one uniform page size, B&W binarization with pictures kept grayscale, front/back cover and jacket handling (include, leave out, or save as separate files; from a given file, the scans, the front/back of the jacket, or the web), OCR text layer (ocrmypdf + Apple OCR), PDF bookmarks from the table of contents, and Title/Author metadata editing without recompression. Use this whenever the user has a folder of scanned images (from a ScanSnap or other scanner) of a book, magazine, manual, notes, or any document and wants them turned into a ZIP/CBZ/PDF, cleaned up, deskewed, cropped, binarized, OCR'd or bookmarked — even if they don't say "jisui", e.g. "turn these scans into a PDF", "make a PDF from my scanned images", "OCR this scanned PDF", "add a TOC to this scan".
 argument-hint: "[scan folder or file (default: .)] [more paths...]"
 ---
 
@@ -13,7 +13,7 @@ This skill does not decide the output file's name or location. Follow the caller
 
 Arguments: $ARGUMENTS
 
-Read the given paths (folders of scans, image files, or PDFs) first; if none were given, use the current directory (`.`) — unless the request itself names the scans. Then: list each one recursively (subfolders, file names, extensions, counts, image dimensions/DPI of a few files), and look at a few images (first, last, and a couple in between). From that, work out the structure — e.g. one volume per folder or several volumes in one folder, which files look like the cover / jacket / body pages, odd/even page splits, duplicates or stray files — and propose a concrete jisui plan (volumes, page order, cover/jacket sources, suggested options). Fold that plan into the questions below so the user confirms or corrects it in one step.
+Read the given paths (folders of scans, image files, or PDFs) first; if none were given, use the current directory (`.`) — unless the request itself names the scans. Then: list each one recursively (subfolders, file names, extensions, counts, image dimensions/DPI of a few files), and look at a few images (first, last, and a couple in between). From that, work out the structure — e.g. one volume per folder or several volumes in one folder, which files look like the cover / back cover / jacket / body pages, odd/even page splits, duplicates or stray files — and propose a concrete jisui plan (volumes, page order, cover/back cover/jacket sources, suggested options). Fold that plan into the questions below so the user confirms or corrects it in one step.
 
 ## Before starting
 
@@ -21,17 +21,19 @@ Ask the user (one `AskUserQuestion` call) for whatever the caller hasn't already
 
 - Output format: ZIP / CBZ / PDF.
 - Cover (front cover): placement — first page of the output / not used / separate file next to the output; and source — a file the user gives / the first scan / the front part of the jacket / an image found on the web.
+- Back cover: placement — last page before the jacket / not used / separate file next to the output; and source — a file the user gives / the last scan (before the jacket, if the jacket is the last scan) / the back part of the jacket / an image found on the web.
 - Jacket (cover jacket scan or image): the same two questions; source — a file the user gives / the last scan / an image found on the web.
 
-A source from the scans is taken out of the body pages even when its placement is "not used" (it isn't processed or kept). If there is no cover/jacket source, every scan is a body page. For a web image, search for the edition matching the scans (title, publisher, ISBN if visible), download the largest version into the scratch area, show it to the user and get it confirmed before using it.
+A source from the scans is taken out of the body pages even when its placement is "not used" (it isn't processed or kept). If there is no cover/back cover/jacket source, every scan is a body page. For a web image, search for the edition matching the scans (title, publisher, ISBN if visible), download the largest version into the scratch area, show it to the user and get it confirmed before using it.
 
 ## Page processing
 
-0. Cover / jacket (as decided in "Before starting"). All the steps below apply to body pages only.
+0. Cover / back cover / jacket (as decided in "Before starting"). All the steps below apply to body pages only.
    - Cover: used as-is, unprocessed (still in color, dimensions unchanged). Included → the first page.
      From the front part of the jacket: look at the upright jacket and find the front panel's columns X0–X1 — between the spine fold and the front flap fold (right of the spine for a left-bound book, left of it for a right-bound / vertical-writing one) — and crop just that, full height (still in color).
+   - Back cover: the same as the cover. Included → the page after the last body page (before the jacket). From the back part of the jacket: the back panel, between the back flap fold and the spine fold (on the other side of the spine from the front panel).
    - Jacket: only rotate it to the correct orientation (still in color, dimensions unchanged). Rotate pixel-exactly; if the JPEG's dimensions don't allow lossless rotation, use PNG. Included → the last page; in the PDF, make only that page actual size (per its DPI).
-   - Separate file: save it next to the output as `<output name>-cover.<ext>` / `<output name>-jacket.png`, unchanged from what the script wrote.
+   - Separate file: save it next to the output as `<output name>-cover.<ext>` / `<output name>-back.<ext>` / `<output name>-jacket.png`, unchanged from what the script wrote.
 1. Skew correction: for each page, detect the skew within ±3° in 0.1° steps and correct it.
    - Detect and correct rotation (the lines are tilted) and shear (the lines are level but only the left/right edges of the text block are slanted — this happens when the paper slides sideways in a sheet feeder) separately.
    - Pages with little text (title pages, half-titles, short pages) can't be checked reliably for skew, so don't correct them.
@@ -56,7 +58,7 @@ A source from the scans is taken out of the body pages even when its placement i
 
 ## Running
 
-`uv run <this skill's folder>/scripts/jisui.py <image folder> <output folder> [--threshold N | --gray | --color] [--no-deskew 1,12,...] [--picture 3,24,...] [--dpi N] [--cover first|FILE|jacket:X0-X1] [--jacket last|FILE] [--jacket-rotate 0|90|180|270]` performs step 0 (`--cover`: copies the first scan or FILE as-is as `0000.<ext>`, or with `jacket:X0-X1` crops those columns of the upright jacket as `0000.png` (needs `--jacket`); `--jacket`: takes the last scan or FILE, rotates it clockwise by `--jacket-rotate`, and writes it as the last `NNNN.png`; pass them whenever there is a cover/jacket source, whatever its placement), steps 1–3, and step 6 (B&W) (with `--gray`, no B&W and pages stay grayscale; with `--color`, pages stay in color), and writes the page images (PNG) and a report (`<output folder>-report.json`: threshold, box dimensions, blank/scaled-down pages and pages with grayscale areas). Page numbers are the output numbers (`NNNN.png`; the cover is 0, the first body page 1). Pass page numbers not to deskew to `--no-deskew`, and image-page numbers to `--picture` (the report then also gives the image-page box dimensions; the height is the same as the body, so one `--imgsize` is enough). Put working output in the scratch area; never write to the original scans or the user's folders.
+`uv run <this skill's folder>/scripts/jisui.py <image folder> <output folder> [--threshold N | --gray | --color] [--no-deskew 1,12,...] [--picture 3,24,...] [--dpi N] [--cover first|FILE|jacket:X0-X1] [--back last|FILE|jacket:X0-X1] [--jacket last|FILE] [--jacket-rotate 0|90|180|270]` performs step 0 (`--cover`: copies the first scan or FILE as-is as `0000.<ext>`, or with `jacket:X0-X1` crops those columns of the upright jacket as `0000.png` (needs `--jacket`); `--back`: the same for the back cover, from the last scan (taken before the jacket's), written right after the body pages as `NNNN.<ext>` (`.png` when cropped from the jacket); `--jacket`: takes the last scan or FILE, rotates it clockwise by `--jacket-rotate`, and writes it as the last `NNNN.png`; pass them whenever there is a cover/back cover/jacket source, whatever its placement), steps 1–3, and step 6 (B&W) (with `--gray`, no B&W and pages stay grayscale; with `--color`, pages stay in color), and writes the page images (PNG) and a report (`<output folder>-report.json`: threshold, box dimensions, blank/scaled-down pages and pages with grayscale areas). Page numbers are the output numbers (`NNNN.png`; the cover is 0, the first body page 1). Pass page numbers not to deskew to `--no-deskew`, and image-page numbers to `--picture` (the report then also gives the image-page box dimensions; the height is the same as the body, so one `--imgsize` is enough). Put working output in the scratch area; never write to the original scans or the user's folders.
 
 - Don't assume a trim size. By default it minimizes margins and makes the body pages uniform in size. The resolution for mm↔px conversion comes from the image's DPI tag; if there is no tag or it is below 150 (a placeholder like 72), assume 300dpi (otherwise pass `--dpi N`).
 - When making a PDF, set the size with `img2pdf --imgsize x<box height in mm>` (the output PNGs carry no DPI info). Build the cover-jacket page separately without `--imgsize` (actual size per its DPI tag) and append it with `pikepdf`.
@@ -64,7 +66,7 @@ A source from the scans is taken out of the body pages even when its placement i
 
 ## Output
 
-Before packing, take the cover/jacket images whose placement is "not used" or "separate file" out of the page set (and save the separate ones as in step 0).
+Before packing, take the cover/back cover/jacket images whose placement is "not used" or "separate file" out of the page set (and save the separate ones as in step 0).
 
 - ZIP: put the processed page images at the top level of the archive, with filenames in page order. Don't recompress the images (`zip -0`). Don't include `.DS_Store` and the like.
 - CBZ: the same as ZIP, with the `.cbz` extension. Readers use the first image as the thumbnail. Add `ComicInfo.xml` only through metadata editing.
